@@ -24,6 +24,6 @@ package router_pkg;
         logic [3:0] x_count;
         y_dir_e y_dir;
         logic [3:0] y_count;
-    } packet;
+    } packet_t;
 
 endpackage

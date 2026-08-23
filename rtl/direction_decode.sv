@@ -8,18 +8,34 @@ module direction_decode (
     output packet_t pkt_out
 );
 
+    // Unpack struct fields outside the always_comb block: iverilog cannot
+    // track constant selects (struct members) in always_* sensitivity lists
+    // and would emit "sorry: constant selects ..." warnings otherwise.
+    wire logic [3:0] x_count = pkt_in.x_count;
+    wire logic [3:0] y_count = pkt_in.y_count;
+    wire x_dir_e x_dir = pkt_in.x_dir;
+    wire y_dir_e y_dir = pkt_in.y_dir;
+
     always_comb begin
         pkt_out = pkt_in;
         out_port = PORT_L;
         valid_out = valid_in;
 
-        if (pkt_in.x_count != 0) begin
-        out_port = (pkt_in.x_dir == EAST) ? PORT_E : PORT_W;
-        pkt_out.x_count = pkt_in.x_count - 1;
+        if (x_count != 4'd0) begin
+        if (x_dir == EAST) begin
+            out_port = PORT_E;
+        end else begin
+            out_port = PORT_W;
         end
-        else if (pkt_in.y_count != 0) begin
-        out_port = (pkt_in.y_dir == NORTH) ? PORT_N : PORT_S;
-        pkt_out.y_count = pkt_in.y_count - 1;
+        pkt_out.x_count = x_count - 4'd1;
+        end
+        else if (y_count != 4'd0) begin
+        if (y_dir == NORTH) begin
+            out_port = PORT_N;
+        end else begin
+            out_port = PORT_S;
+        end
+        pkt_out.y_count = y_count - 4'd1;
         end
         else begin
         out_port = PORT_L;

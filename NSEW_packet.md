@@ -8,11 +8,6 @@ If the routers read the first 3 bits to determine destination, and after reading
 
 LOCAL (000) is never coded into the header by the sender. A North->East route only needs 6 real header bits (2 fields); the header is zero-padded at injection to the provisioned width of 12 bits (4 fields, the 3x3 max manhattan distance). Since zero is never a real direction, the first zero-filled field a router reads is LOCAL, which terminates the routing, assuming correct routing.
 
-"visualize in ascii |header for 2 routes (North, East)| + |payload|"
-
-"visualize the shift for each router"
-
-"visualize the nulled header"
 
 ## ASCII visualization
 

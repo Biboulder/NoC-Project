@@ -4,7 +4,7 @@ module direction_decode (
     input  logic valid_in,
     input  packet_t pkt_in,
     output logic valid_out,
-    output port_e out_port,
+    output direction_e out_port,
     output packet_t pkt_out
 );
 

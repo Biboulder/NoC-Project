@@ -8,6 +8,81 @@ If the routers read the first 3 bits to determine destination, and after reading
 
 LOCAL (000) is never coded into the header by the sender. A North->East route only needs 6 real header bits (2 fields); the header is zero-padded at injection to the provisioned width of 12 bits (4 fields, the 3x3 max manhattan distance). Since zero is never a real direction, the first zero-filled field a router reads is LOCAL, which terminates the routing, assuming correct routing.
 
+## Wire format
+
+Each router-to-router link carries a separate valid bit alongside the
+packet:
+
+```
+router A              router B
+        valid ────────►
+        packet[43:0] ─►   header[11:0] | payload[31:0]
+```
+
+The 44-bit packet is a fixed 12-bit header (grid-provisioned) followed by a
+full 32-bit payload word: `packet[43:32]` is the header (`header[11:0]`,
+MSB-first — bit 43 is the first direction field), `packet[31:0]` is the
+payload. The valid bit is NOT part of the packet; it tells the receiver
+whether the data lines carry a real packet:
+
+```
+  valid │ packet[43:0]
+  ──────┼─────────────────────────────────────────────
+    1   │ 001 011 000 000 │ payload   ← real packet; the header is decoded,
+        │                              even when it is fully nulled (LOCAL
+        │                              delivery in progress)
+    0   │ 000 000 000 000 │ 00000000  ← idle link; data lines are don't-care
+        │                              (driven to 0), nothing is decoded
+```
+
+Without the valid bit, an idle link driving all zeros would be
+indistinguishable from a packet whose header has been fully nulled — i.e.
+a LOCAL-terminated packet — causing spurious deliveries.
+
+## Router buffering (send and receive simultaneously)
+
+Each router registers its input: at every rising clock edge it latches the
+incoming (valid, packet) pair into an input buffer. The output is
+combinational logic over that buffered input — the router drives its output
+from the *previous* clock cycle's input:
+
+```
+                  ┌─────────────────────────────────────┐
+                  │               ROUTER                │
+ valid_in ───────►│  ┌────────────┐  ┌───────────────┐  │──────► valid_out
+ pkt_in[43:0] ───►│  │ input      │  │ decode +      │  │──────► pkt_out[43:0]
+                  │  │ buffer     ├─►│ shift (comb.) │  │
+                  │  │ (register) │  │               │  │
+                  │  └────────────┘  └───────────────┘  │
+                  └─────────────────────────────────────┘
+```
+
+Consequence: during any cycle the router transmits the packet it received
+the previous cycle while simultaneously accepting a new one — it never
+stalls on its own output. Per-hop latency is 1 clock cycle; throughput is
+1 packet per cycle.
+
+```
+clock cycle               N        N+1      N+2      N+3
+--------------------------------------------------------------
+input (valid, packet)     pkt A    pkt B    pkt C    pkt D
+                          v edge   v edge   v edge   v edge
+--------------------------------------------------------------
+input buffer                -      pkt A    pkt B    pkt C
+output (valid, packet)      -      A'       B'       C'
+```
+
+A' is pkt A after decode + shift: the header is read (header[11:9] selects
+the output port), shifted left 3, and the result driven on the output — all
+from the buffered copy, so the input stays free to accept pkt B in the same
+cycle.
+
+## Scheduler
+
+A hardcoded, repeating schedule table guarantees that no two packets ever
+target the same link in the same slot — collisions and arbitration are
+avoided by construction. The schedule itself is specified in a separate
+file.
 
 ## ASCII visualization
 

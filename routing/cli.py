@@ -30,9 +30,47 @@ def _generate(args):
     return 0
 
 
+def _bf_header(args, schedule, stats):
+    """Comment block prepended to the schedule file: per-schedule facts.
+
+    Every line starts with '#', which the schedule parser skips, so the
+    file stays loadable by `run`/`visualize`.
+    """
+    n = schedule.grid
+    pairs = n * n * (n * n - 1)
+    rows = stats["rows"]
+    frame = stats["frame"]
+    if args.pack == "none":
+        semantics = (
+            f"max bandwidth: all {pairs} pairs fire every period — one entry per "
+            "(node, clock) row, no choices, guaranteed"
+        )
+    else:
+        periods_full = -(-pairs // rows)  # ceil
+        semantics = (
+            f"tight latency: one packet per row per period ({rows} of {pairs} pairs "
+            f"fire); destinations sharing a row are mutually exclusive; rotating "
+            f"choices cover all pairs in {periods_full} periods"
+        )
+    lines = [
+        f"# grid {n}x{n}, seed {args.seed}, pack mode: {args.pack}",
+        f"# rows {rows}, alternatives {stats['alternatives']}, "
+        f"rows with choices {stats['rows_with_choices']}",
+        f"# period (frame) {frame} cycles, max injection clock {stats['max_clock']}",
+        f"# worst-case wait from period start to any destination: "
+        f"<= {stats['max_clock']} clocks",
+        f"# per-destination repeat rate: once every {frame} cycles",
+        f"# aggregate throughput: {rows}/{frame} = {rows / frame:.2f} packets per cycle",
+        f"# {semantics}",
+        f"# command: python3 -m routing generate-bf --grid {n} --seed {args.seed} "
+        f"--pack {args.pack}",
+    ]
+    return "\n".join(lines)
+
+
 def _generate_bf(args):
-    schedule, stats = generate_bruteforce(args.grid, args.seed)
-    text = dump(schedule)
+    schedule, stats = generate_bruteforce(args.grid, args.seed, pack=args.pack)
+    text = _bf_header(args, schedule, stats) + "\n" + dump(schedule)
     if args.out:
         with open(args.out, "w") as f:
             f.write(text)
@@ -40,8 +78,12 @@ def _generate_bf(args):
         sys.stdout.write(text)
     print(
         f"grid {args.grid}x{args.grid}, {stats['full_paths']} full paths, "
+        f"{stats['rows']} rows ({stats['alternatives']} alternatives, "
+        f"{stats['rows_with_choices']} with choices), "
         f"{stats['passes']} clock passes, "
         f"frame {stats['frame']} cycles (max clock {stats['max_clock']}), "
+        f"worst-case wait <= {stats['max_clock']} clocks, "
+        f"throughput {stats['rows'] / stats['frame']:.2f} pkts/cycle, "
         f"seed {args.seed}",
         file=sys.stderr,
     )
@@ -96,6 +138,15 @@ def main(argv=None):
     )
     bf.add_argument("--grid", type=int, default=3, help="NxN grid size (default 3)")
     bf.add_argument("--seed", type=int, default=0, help="RNG seed (default 0)")
+    bf.add_argument(
+        "--pack",
+        choices=["none", "row", "scan", "lookback"],
+        default="none",
+        help="pack several destinations into shared (node, clock) rows: "
+        "none (max bandwidth, one entry per row) | row (recommended: "
+        "tight latency) | scan (per-pair clock scan) | lookback "
+        "(sweep + earlier rows; identical to row in practice)",
+    )
     bf.add_argument("--out", default=None, help="write schedule to FILE instead of stdout")
 
     r = sub.add_parser("run", help="load a schedule and execute it on the clocked grid")

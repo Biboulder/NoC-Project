@@ -170,17 +170,27 @@ def _all_paths(n):
     return by_pair
 
 
-def generate_bruteforce(n, seed):
+def generate_bruteforce(n, seed, pack="none"):
     """Simulated brute-force schedule; deterministic for (n, seed).
 
-    Enumerate all simple paths per (src, dst) pair, then sweep the
-    uncommitted pairs longest-distance-first at a global clock offset: each
-    pair tries its own paths from shortest to longest and commits the first
-    that is slot-disjoint from every committed entry; when a pass commits
-    nothing new the offset increments by 1 and all remaining pairs are
-    re-swept at the new offset (committed entries keep their clocks).
-    Committing a pair deletes its alternative paths (deletion by omission).
-    Every (node, clock) row ends with exactly one entry — no alternatives.
+    Enumerate all simple paths per (src, dst) pair; pairs are swept
+    longest-distance-first (ties seeded-shuffled), each trying its own paths
+    from shortest to longest. Committing a pair deletes its alternative
+    paths (deletion by omission). ``pack`` selects how many destinations may
+    share a (node, clock) row:
+
+    - "none": strict slot-disjointness — every row holds exactly one entry
+      and all pairs fire every period.
+    - "row" (V1): a pair may join an existing (source, clock) row as an
+      alternative — alternatives are mutually exclusive (one packet per node
+      per clock, rule 6) so they may share slots; the candidate is checked
+      only against entries of *other* rows.
+    - "scan" (V2): no global-offset sweep — each pair independently scans
+      clocks 0, 1, 2, ... and commits at the first clock where it fits as a
+      new row or an alternative.
+    - "lookback" (V3): the "row" sweep, but a pair that fails at the current
+      offset also tries joining earlier rows of its source (earliest first)
+      before deferring.
 
     Returns (Schedule, stats). Termination is guaranteed: once the offset
     exceeds every committed slot cycle, the first remaining pair's slots all
@@ -188,6 +198,10 @@ def generate_bruteforce(n, seed):
     """
     if n < 2:
         raise ValueError(f"grid must be >= 2, got {n}")
+    if pack not in ("none", "row", "scan", "lookback"):
+        raise ValueError(
+            f"pack must be one of none/row/scan/lookback, got {pack!r}"
+        )
 
     rng = random.Random(seed)
     by_pair = _all_paths(n)
@@ -213,37 +227,75 @@ def generate_bruteforce(n, seed):
 
     committed = []  # list[Entry]
     committed_slots = []  # parallel list of slot maps
-    remaining = order
-    offset = 0
-    passes = 0
-    while remaining:
-        passes += 1
-        still = []
-        for s, d in remaining:
-            placed = False
-            for L in sorted(by_pair[(s, d)]):
-                for route in by_pair[(s, d)][L]:
-                    cand = slot_map(n, s, offset, route)
-                    if not any(
-                        cand.keys() & cslots.keys() for cslots in committed_slots
-                    ):
-                        committed.append(Entry(s, offset, d, route))
-                        committed_slots.append(cand)
-                        placed = True
-                        break
-                if placed:
-                    break
-            if not placed:
+    row_keys = set()  # (node, clock) rows that exist
+
+    def conflict(cand, s, o, skip_row):
+        """Candidate slots vs every committed entry; with ``skip_row`` the
+        (source, clock) row's own entries are mutually-exclusive
+        alternatives and may share slots, so they are skipped."""
+        for ce, cslots in zip(committed, committed_slots):
+            if skip_row and ce.node == s and ce.clock == o:
+                continue
+            if cand.keys() & cslots.keys():
+                return True
+        return False
+
+    def try_place(s, d, o, skip_row):
+        """Commit pair (s, d) at clock ``o`` if any path fits; True if so."""
+        for L in sorted(by_pair[(s, d)]):
+            for route in by_pair[(s, d)][L]:
+                cand = slot_map(n, s, o, route)
+                if not conflict(cand, s, o, skip_row):
+                    committed.append(Entry(s, o, d, route))
+                    committed_slots.append(cand)
+                    row_keys.add((s, o))
+                    return True
+        return False
+
+    if pack == "scan":
+        # V2: per-pair clock scan — each pair finds its own first fit.
+        for s, d in order:
+            o = 0
+            while not try_place(s, d, o, skip_row=True):
+                o += 1
+        passes = max((e.clock for e in committed), default=0) + 1
+    else:
+        # sweep: none | row | lookback
+        skip_row = pack in ("row", "lookback")
+        remaining = order
+        offset = 0
+        passes = 0
+        while remaining:
+            passes += 1
+            still = []
+            for s, d in remaining:
+                if try_place(s, d, offset, skip_row):
+                    continue
+                if pack == "lookback":
+                    placed = False
+                    for c in range(offset):  # earlier rows, earliest first
+                        if (s, c) in row_keys and try_place(s, d, c, skip_row=True):
+                            placed = True
+                            break
+                    if placed:
+                        continue
                 still.append((s, d))
-        remaining = still
-        offset += 1
+            remaining = still
+            offset += 1
 
     assert len(committed) == n * n * (n * n - 1)
+    rows = {}
+    for e in committed:
+        rows.setdefault((e.node, e.clock), []).append(e)
     max_clock = max((e.clock for e in committed), default=0)
     stats = {
         "full_paths": n * n * (n * n - 1),
         "passes": passes,
+        "rows": len(rows),
+        "alternatives": len(committed),
+        "rows_with_choices": sum(1 for alts in rows.values() if len(alts) >= 2),
         "max_clock": max_clock,
-        "frame": max_clock + max_hops_for(n) + 1,
+        # accurate drain tail: last cycle any packet occupies a router
+        "frame": max((e.clock + len(e.route) for e in committed), default=0) + 1,
     }
     return Schedule(n, committed), stats

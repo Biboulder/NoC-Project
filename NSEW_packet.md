@@ -81,8 +81,9 @@ cycle.
 
 A hardcoded, repeating schedule table guarantees that no two packets ever
 target the same link in the same slot — collisions and arbitration are
-avoided by construction. The schedule itself is specified in a separate
-file.
+avoided by construction. The table is generated offline from the routing
+rules (routing.md): BFS from every node with coin-flip collision
+resolution; the router itself performs no runtime arbitration.
 
 ## ASCII visualization
 

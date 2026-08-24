@@ -29,10 +29,22 @@ class Entry:
 class Schedule:
     grid: int
     entries: list  # list[Entry]
+    frame: int = 0  # explicit period (0 = derive): repeats every `frame` cycles
 
     @property
     def max_clock(self):
         return max((e.clock for e in self.entries), default=0)
+
+    @property
+    def period(self):
+        """Repeating period: explicit ``frame``, else last occupied cycle + 1.
+
+        The period covers injections plus the flush tail — the network is
+        empty exactly at the period boundary, so looping is collision-free.
+        """
+        if self.frame:
+            return self.frame
+        return max((e.clock + len(e.route) for e in self.entries), default=0) + 1
 
     def count(self):
         return len(self.entries)
@@ -52,6 +64,7 @@ def parse(text):
     """Parse schedule text; ValueError with line number on any violation."""
     lines = text.splitlines()
     n = None
+    frame = 0
     current = None
     seen_nodes = set()
     seen_rows = set()
@@ -91,6 +104,18 @@ def parse(text):
         tok = line.split()
         if tok[0] == "grid":
             raise ValueError(f"line {lineno}: 'grid' directive must be the first line")
+        if tok[0] == "frame":
+            if current is not None:
+                raise ValueError(f"line {lineno}: 'frame' must come before any 'node' section")
+            if len(tok) != 2:
+                raise ValueError(f"line {lineno}: expected 'frame N', got {line!r}")
+            try:
+                frame = int(tok[1])
+            except ValueError:
+                raise ValueError(f"line {lineno}: invalid frame {tok[1]!r}") from None
+            if frame < 1:
+                raise ValueError(f"line {lineno}: frame must be >= 1, got {frame}")
+            continue
         if len(tok) != 3:
             raise ValueError(
                 f"line {lineno}: expected '<clock> <dest1,dest2,...> <route1,route2,...>', got {line!r}"
@@ -162,7 +187,13 @@ def parse(text):
 
     if n is None:
         raise ValueError("empty schedule: missing 'grid N' directive")
-    return Schedule(n, entries)
+    drain = max((e.clock + len(e.route) for e in entries), default=0) + 1
+    if frame and frame < drain:
+        raise ValueError(
+            f"line: frame {frame} is shorter than the schedule's drain tail "
+            f"(last packet occupies cycle {drain - 1})"
+        )
+    return Schedule(n, entries, frame)
 
 
 def load(path):
@@ -173,6 +204,8 @@ def load(path):
 def dump(schedule):
     """Render a Schedule back to file format (round-trips parse)."""
     out = [f"grid {schedule.grid}"]
+    if schedule.frame:
+        out.append(f"frame {schedule.frame}")
     by_node = {}
     for (node, clock), alts in schedule.rows().items():
         by_node.setdefault(node, []).append((clock, alts))

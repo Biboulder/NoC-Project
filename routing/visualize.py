@@ -133,10 +133,9 @@ def _frame(schedule, c, cell, margin, radius, title_h, cap_h, fw, fh, glide_ms):
 
 def render_svg(schedule, flip_ms=1200):
     n = schedule.grid
-    # Cycles 0..last occupied slot: injections plus the real drain tail
-    # (a max_hops-length route from max_clock would be a conservative
-    # over-estimate that leaves empty frames at the end).
-    frames = max((e.clock + len(e.route) for e in schedule.entries), default=0) + 1
+    # Cycles 0..period-1: injections plus the real drain tail (flush).
+    # `frame N` in the file overrides the derived value.
+    frames = schedule.period
     if flip_ms <= 0:
         raise ValueError(f"flip_ms must be > 0, got {flip_ms}")
 

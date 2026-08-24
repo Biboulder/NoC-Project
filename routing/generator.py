@@ -298,4 +298,4 @@ def generate_bruteforce(n, seed, pack="none"):
         # accurate drain tail: last cycle any packet occupies a router
         "frame": max((e.clock + len(e.route) for e in committed), default=0) + 1,
     }
-    return Schedule(n, committed), stats
+    return Schedule(n, committed, stats["frame"]), stats

@@ -7,6 +7,7 @@
 # max bandwidth: all 72 pairs fire every period — one entry per (node, clock) row, no choices, guaranteed
 # command: python3 -m routing generate-bf --grid 3 --seed 0 --pack none
 grid 3
+frame 33
 node 1:
   0 9 EESS
   4 8 SES

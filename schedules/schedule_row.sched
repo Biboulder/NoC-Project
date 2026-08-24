@@ -7,6 +7,7 @@
 # tight latency: one packet per row per period (20 of 72 pairs fire); destinations sharing a row are mutually exclusive; rotating choices cover all pairs in 4 periods
 # command: python3 -m routing generate-bf --grid 3 --seed 0 --pack row
 grid 3
+frame 14
 node 1:
   0 9,6,3,5,2 EESS,EES,EE,EESW,E
   5 8,7,4 SSE,SS,S

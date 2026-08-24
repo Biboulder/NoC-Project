@@ -127,7 +127,11 @@ class Grid:
         max_latency = 0
         pending = set()  # (src, dst, injected_cycle)
 
-        for c in range(schedule.max_clock + self.max_hops + 2):
+        # Run through the last possible delivery (clock + hops + 1); this
+        # covers one period plus the flush tail, and also multi-period
+        # schedules (clocks shifted by k * period).
+        last_slot = max((e.clock + len(e.route) for e in schedule.entries), default=0)
+        for c in range(last_slot + 2):
             # 1. Outputs: each router emits (or delivers) its buffered packet.
             driven = {}  # (x, y) -> list[(in_port, pkt)]
             for r in self.routers:

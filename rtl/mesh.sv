@@ -1,45 +1,21 @@
 import router_pkg::*;
 
-// Parameterizable SIDE x SIDE 2D mesh of `router` instances, connected
-// with dimension-order (N/S/E/W) links between grid neighbors.
-//
-// Node (row, col) sits at flattened local-port index row*SIDE + col,
-// row-major, with row 0 = north edge and col 0 = west edge:
-//
-//   (0,0)--(0,1)--(0,2)--...--(0,SIDE-1)
-//     |      |      |             |
-//   (1,0)--(1,1)--(1,2)--...--(1,SIDE-1)
-//     |      |      |             |
-//    ...    ...    ...           ...
-//
-// Boundary links (mesh edges with no neighbor) are tied off: the
-// corresponding valid_in is forced to 0 / pkt_in to '0.
-//
-// NOTE: routing is source-routed via the 12-bit packet header, which
-// only carries 4 x 3-bit direction fields (3 hops + a final LOCAL
-// marker, or 4 real hops relying on automatic zero-pad termination).
-// Full corner-to-corner routing fits within that budget for SIDE <= 3;
-// larger meshes need a wider HEADER in router_pkg.sv.
 module mesh #(
     parameter int SIDE = 3
 ) (
-    input  logic clk,
-    input  logic rst_n,
+    input logic clk,
+    input logic rst_n,
 
-    input  logic [SIDE*SIDE-1:0]                   valid_in_l,
-    input  logic [SIDE*SIDE-1:0][PACKET_WIDTH-1:0] pkt_in_l,
-    output logic [SIDE*SIDE-1:0]                   valid_out_l,
+    input logic [SIDE*SIDE-1:0] valid_in_l,
+    input logic [SIDE*SIDE-1:0][PACKET_WIDTH-1:0] pkt_in_l,
+    output logic [SIDE*SIDE-1:0] valid_out_l,
     output logic [SIDE*SIDE-1:0][PACKET_WIDTH-1:0] pkt_out_l
 );
 
-    // Per-node output wires, one full SIDE x SIDE array per direction.
-    // router(r,c)'s output always lands here; a neighbor (if any) reads
-    // the matching element as its input. Boundary-facing elements are
-    // simply left unread.
-    logic    out_n_valid [SIDE][SIDE], out_s_valid [SIDE][SIDE];
-    logic    out_e_valid [SIDE][SIDE], out_w_valid [SIDE][SIDE];
-    packet_t out_n_pkt   [SIDE][SIDE], out_s_pkt   [SIDE][SIDE];
-    packet_t out_e_pkt   [SIDE][SIDE], out_w_pkt   [SIDE][SIDE];
+    logic out_n_valid [SIDE][SIDE], out_s_valid [SIDE][SIDE];
+    logic out_e_valid [SIDE][SIDE], out_w_valid [SIDE][SIDE];
+    packet_t out_n_pkt [SIDE][SIDE], out_s_pkt [SIDE][SIDE];
+    packet_t out_e_pkt [SIDE][SIDE], out_w_pkt [SIDE][SIDE];
 
     generate
         for (genvar r = 0; r < SIDE; r++) begin : row_gen
@@ -47,39 +23,39 @@ module mesh #(
 
                 localparam int IDX = r * SIDE + c;
 
-                logic    in_n_valid, in_s_valid, in_w_valid, in_e_valid;
-                packet_t in_n_pkt,   in_s_pkt,   in_w_pkt,   in_e_pkt;
+                logic in_n_valid, in_s_valid, in_w_valid, in_e_valid;
+                packet_t in_n_pkt, in_s_pkt, in_w_pkt, in_e_pkt;
 
                 if (r == 0) begin : north_boundary
                     assign in_n_valid = 1'b0;
-                    assign in_n_pkt   = '0;
+                    assign in_n_pkt = '0;
                 end else begin : north_interior
                     assign in_n_valid = out_s_valid[r-1][c];
-                    assign in_n_pkt   = out_s_pkt[r-1][c];
+                    assign in_n_pkt = out_s_pkt[r-1][c];
                 end
 
                 if (r == SIDE-1) begin : south_boundary
                     assign in_s_valid = 1'b0;
-                    assign in_s_pkt   = '0;
+                    assign in_s_pkt = '0;
                 end else begin : south_interior
                     assign in_s_valid = out_n_valid[r+1][c];
-                    assign in_s_pkt   = out_n_pkt[r+1][c];
+                    assign in_s_pkt = out_n_pkt[r+1][c];
                 end
 
                 if (c == 0) begin : west_boundary
                     assign in_w_valid = 1'b0;
-                    assign in_w_pkt   = '0;
+                    assign in_w_pkt = '0;
                 end else begin : west_interior
                     assign in_w_valid = out_e_valid[r][c-1];
-                    assign in_w_pkt   = out_e_pkt[r][c-1];
+                    assign in_w_pkt = out_e_pkt[r][c-1];
                 end
 
                 if (c == SIDE-1) begin : east_boundary
                     assign in_e_valid = 1'b0;
-                    assign in_e_pkt   = '0;
+                    assign in_e_pkt = '0;
                 end else begin : east_interior
                     assign in_e_valid = out_w_valid[r][c+1];
-                    assign in_e_pkt   = out_w_pkt[r][c+1];
+                    assign in_e_pkt = out_w_pkt[r][c+1];
                 end
 
                 router u_router (
@@ -91,7 +67,7 @@ module mesh #(
                     .valid_in_e(in_e_valid), .pkt_in_e(in_e_pkt),
 
                     .valid_in_l(valid_in_l[IDX]),
-                    .pkt_in_l  (pkt_in_l[IDX]),
+                    .pkt_in_l(pkt_in_l[IDX]),
 
                     .valid_out_n(out_n_valid[r][c]), .pkt_out_n(out_n_pkt[r][c]),
                     .valid_out_s(out_s_valid[r][c]), .pkt_out_s(out_s_pkt[r][c]),
@@ -99,7 +75,7 @@ module mesh #(
                     .valid_out_e(out_e_valid[r][c]), .pkt_out_e(out_e_pkt[r][c]),
 
                     .valid_out_l(valid_out_l[IDX]),
-                    .pkt_out_l  (pkt_out_l[IDX])
+                    .pkt_out_l(pkt_out_l[IDX])
                 );
 
             end

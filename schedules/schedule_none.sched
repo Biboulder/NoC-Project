@@ -1,91 +1,91 @@
 # grid 3x3, seed 0, pack mode: none
 # rows 72, alternatives 72, rows with choices 0
-# period (frame) 33 cycles, max injection clock 31
-# worst-case wait from period start to any destination: <= 31 clocks
-# per-destination repeat rate: once every 33 cycles
-# aggregate throughput: 72/33 = 2.18 packets per cycle
+# period (frame) 37 cycles, max injection clock 35
+# worst-case wait from period start to any destination: <= 35 clocks
+# per-destination repeat rate: once every 37 cycles
+# aggregate throughput: 72/37 = 1.95 packets per cycle
 # max bandwidth: all 72 pairs fire every period — one entry per (node, clock) row, no choices, guaranteed
 # command: python3 -m routing generate-bf --grid 3 --seed 0 --pack none
 grid 3
-frame 33
+frame 37
 node 1:
   0 9 EESS
   4 8 SES
-  9 6 EES
-  11 3 EE
+  8 6 ESE
+  10 7 SS
+  12 3 SEEN
   13 5 SE
-  15 2 E
-  17 7 SS
-  18 4 S
+  19 4 S
+  22 2 E
 node 2:
-  0 7 WSS
-  8 9 ESS
-  14 6 ES
+  0 9 ESS
+  7 7 SWS
+  17 6 WSEE
   19 4 WS
-  20 8 WSES
-  21 5 ESW
-  23 1 W
-  24 3 E
+  24 8 ESWS
+  27 5 S
+  29 1 W
+  30 3 E
 node 3:
   0 7 SWWS
   5 4 SWW
-  12 8 SSW
-  17 1 WW
-  18 5 SW
-  19 9 SS
-  20 6 S
-  21 2 W
+  6 8 SSW
+  12 1 WW
+  18 5 SSWN
+  19 9 WSES
+  20 2 W
+  21 6 WSE
 node 4:
-  0 9 SEE
+  0 1 N
   4 3 ENE
-  13 6 NESE
+  12 9 SEE
+  16 6 SENE
   17 8 SE
-  24 2 SENN
+  23 2 NE
   25 7 S
-  26 1 N
-  27 5 E
+  26 5 NES
 node 5:
-  0 9 SE
-  3 1 NW
-  11 7 SW
-  12 3 NE
-  13 6 E
-  19 4 W
-  30 8 S
-  31 2 N
+  3 9 ES
+  13 1 NW
+  30 7 SW
+  31 3 NE
+  32 4 W
+  33 6 E
+  34 8 S
+  35 2 N
 node 6:
-  0 1 NWW
-  4 7 SWW
-  5 8 NWSS
-  8 4 SWWN
-  25 2 NW
-  26 5 SWN
+  0 7 SWW
+  5 9 S
+  8 1 NWW
+  9 8 NWSS
+  14 4 NWWS
+  16 2 NW
+  23 5 SWN
   27 3 N
-  28 9 S
 node 7:
   0 3 NNEE
-  2 2 ENN
-  8 6 NEE
-  10 1 NN
-  14 5 NNES
-  16 9 EE
-  17 8 E
-  20 4 ENW
+  1 2 NNE
+  9 6 ENE
+  11 9 EE
+  14 1 NN
+  15 5 EN
+  19 8 E
+  21 4 N
 node 8:
-  0 3 NEN
+  0 3 NNE
   4 1 WNN
   5 4 WN
-  20 6 NE
-  22 2 ENWN
-  23 7 W
-  25 5 N
-  27 9 E
+  6 7 W
+  15 6 NE
+  22 2 WNEN
+  23 5 N
+  26 9 E
 node 9:
-  6 1 NNWW
+  0 7 WW
+  2 1 WNNW
   7 4 WNW
-  8 2 NNW
-  10 7 WW
-  12 3 WNEN
-  13 5 WWNE
-  15 8 W
+  9 2 NNW
+  10 8 W
+  12 3 NN
+  16 5 WN
   17 6 N

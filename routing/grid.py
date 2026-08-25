@@ -9,6 +9,7 @@ are 0-based (x, y). Conversion happens only here and at the file boundary.
 """
 
 from dataclasses import dataclass, field
+import random
 
 from .header import Direction, encode, max_hops_for, route_str
 from .router import OPPOSITE, Router
@@ -48,19 +49,31 @@ def neighbor_of(n, x, y, port):
 
 
 def slot_map(n, node, clock, route):
-    """Occupied slots for one alternative: (cycle, router_index) -> hop index.
+    """Occupied slots for one alternative: (cycle, kind, resource) -> hop index.
 
     Hop index 0 is the LOCAL injection at the source router; hop h is the
-    router reached after h hops, at cycle clock + h. Routes are validated
-    in-grid by the parser, so hops never leave the grid.
+    router reached after h hops, at cycle clock + h. Two resource kinds:
+
+    - kind 0 (router): router h is occupied at cycle clock + h; no router
+      may receive more than one packet per cycle.
+    - kind 1 (link): hop h traverses the link between routers h-1 and h
+      during cycle clock + h. Links are direction-agnostic: a link may
+      carry at most one packet per cycle, either way -- two packets
+      crossing the same link in opposite directions in the same cycle is
+      a collision (the link is a single bidirectional resource).
+
+    Keys are 3-tuples so mixed router/link keys compare cleanly with min().
+    Routes are validated in-grid by the parser, so hops never leave the grid.
     """
     x, y = node_position(n, node)
-    slots = {(clock, y * n + x): 0}
+    slots = {(clock, 0, y * n + x): 0}
     for h, d in enumerate(route, start=1):
         nb = neighbor_of(n, x, y, d)
         assert nb is not None, "route must be validated in-grid"
+        link = tuple(sorted([(x, y), nb]))
+        slots[(clock + h, 1, link)] = h
         x, y = nb
-        slots[(clock + h, y * n + x)] = h
+        slots[(clock + h, 0, y * n + x)] = h
     return slots
 
 
@@ -88,7 +101,7 @@ class Grid:
     def router_at(self, x, y):
         return self.routers[y * self.n + x]
 
-    def run(self, schedule, verbose=False):
+    def run(self, schedule, verbose=False, seed=0):
         n = self.n
         events = []
 
@@ -97,10 +110,10 @@ class Grid:
 
         # --- Stage 0: choice-safety pre-pass ------------------------------
         # Alternatives in the same row (same node, same clock) are mutually
-        # exclusive — the node executes exactly one (rule 6) — so they may
+        # exclusive — the node executes exactly one (rule 6), so they may
         # share slots. Every pair from different rows is co-executable and
-        # must be slot-disjoint; that proves *any* per-row choice is
-        # collision-free.
+        # must be slot-disjoint (routers *and* links); that proves *any*
+        # per-row choice is collision-free.
         entries = schedule.entries
         slot_maps = [slot_map(n, e.node, e.clock, e.route) for e in entries]
         for i in range(len(entries)):
@@ -111,16 +124,28 @@ class Grid:
                     continue
                 shared = slot_maps[i].keys() & slot_maps[j].keys()
                 if shared:
-                    cycle, idx = min(shared)
-                    x, y = idx % n, idx // n
+                    cycle, kind, res = min(shared)
+                    if kind == 0:  # router
+                        x, y = res % n, res // n
+                        what = f"router ({x}, {y})"
+                    else:  # link
+                        (x1, y1), (x2, y2) = res
+                        what = f"link ({x1},{y1})-({x2},{y2})"
                     return fail(
                         f"collision: {_describe(e1)} and {_describe(e2)} "
-                        f"both use slot ({cycle}, ({x}, {y}))"
+                        f"both use slot ({cycle}, {what})"
                     )
 
-        # --- Stage 1: clocked execution, canonical choice -----------------
-        # Canonical choice = first alternative of each row (entry order).
-        choice = {key: alts[0] for key, alts in schedule.rows().items()}
+        # --- Stage 1: clocked execution, seeded-random choice -------------
+        # Each row picks one of its alternatives uniformly at random (seeded,
+        # deterministic for (schedule, seed)): the executed choice spot-checks
+        # a non-trivial selection, which the stage-0 pre-pass already proved
+        # safe for any choice.
+        rng = random.Random(seed)
+        choice = {
+            key: alts[rng.randrange(len(alts))]
+            for key, alts in schedule.rows().items()
+        }
 
         injections = 0
         deliveries = 0

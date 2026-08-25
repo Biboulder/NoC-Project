@@ -6,6 +6,7 @@ import sys
 from .generator import generate, generate_bruteforce
 from .grid import Grid
 from .schedule import dump, load
+from .sched2sv import export_schedule
 from .visualize import render_svg
 
 __all__ = ["main"]
@@ -93,7 +94,7 @@ def _generate_bf(args):
 def _run(args):
     schedule = load(args.file)
     grid = Grid(schedule.grid)
-    report = grid.run(schedule, verbose=args.verbose)
+    report = grid.run(schedule, verbose=args.verbose, seed=args.seed)
     if not report.ok:
         print(f"error: {report.message}", file=sys.stderr)
         return 1
@@ -106,6 +107,17 @@ def _run(args):
         f"{rows} rows, {alts} alternatives; {report.deliveries}/{report.injections} "
         f"delivered, {report.collisions} collisions, max latency {report.max_latency}"
     )
+    return 0
+
+
+def _export_sv(args):
+    schedule = load(args.file)
+    text = export_schedule(schedule, source=args.file)
+    if args.out:
+        with open(args.out, "w") as f:
+            f.write(text)
+    else:
+        sys.stdout.write(text)
     return 0
 
 
@@ -149,9 +161,26 @@ def main(argv=None):
     )
     bf.add_argument("--out", default=None, help="write schedule to FILE instead of stdout")
 
+    x = sub.add_parser(
+        "export-sv",
+        help="export a schedule as a SystemVerilog include (tb_schedule_pkg)",
+    )
+    x.add_argument("file", help="schedule file")
+    x.add_argument(
+        "-o", "--out",
+        default=None,
+        help="write the SV include to FILE instead of stdout",
+    )
+
     r = sub.add_parser("run", help="load a schedule and execute it on the clocked grid")
     r.add_argument("file", help="schedule file")
     r.add_argument("--verbose", action="store_true", help="print per-cycle events")
+    r.add_argument(
+        "--seed",
+        type=int,
+        default=0,
+        help="RNG seed for the per-row choice among a row's alternatives (default 0)",
+    )
 
     v = sub.add_parser(
         "visualize",
@@ -172,6 +201,8 @@ def main(argv=None):
             return _generate(args)
         if args.cmd == "generate-bf":
             return _generate_bf(args)
+        if args.cmd == "export-sv":
+            return _export_sv(args)
         if args.cmd == "visualize":
             return _visualize(args)
         return _run(args)

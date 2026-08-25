@@ -21,7 +21,24 @@ __all__ = [
     "node_position",
     "neighbor_of",
     "slot_map",
+    "choose_alternatives",
 ]
+
+
+def choose_alternatives(schedule, seed=0):
+    """One alternative per row, seeded-random (deterministic for seed).
+
+    Each (node, clock) row executes exactly one of its alternatives
+    (rule 6); this picks one uniformly at random. The stage-0 pre-pass in
+    Grid.run proves *any* such choice is collision-free (routers and
+    links), so the drawn choice is a valid spot-check. ``visualize`` uses
+    the same helper so the drawing matches the sim.
+    """
+    rng = random.Random(seed)
+    return {
+        key: alts[rng.randrange(len(alts))]
+        for key, alts in schedule.rows().items()
+    }
 
 
 def node_position(n, label):
@@ -141,11 +158,7 @@ class Grid:
         # deterministic for (schedule, seed)): the executed choice spot-checks
         # a non-trivial selection, which the stage-0 pre-pass already proved
         # safe for any choice.
-        rng = random.Random(seed)
-        choice = {
-            key: alts[rng.randrange(len(alts))]
-            for key, alts in schedule.rows().items()
-        }
+        choice = choose_alternatives(schedule, seed)
 
         injections = 0
         deliveries = 0

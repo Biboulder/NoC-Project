@@ -91,8 +91,12 @@ per-phase and overall throughput. A clean run ends with
 ```bash
 python3 -m routing visualize schedules/schedule_row.sched --out /tmp/sched.svg
 python3 -m routing visualize schedules/schedule_row.sched --flip-ms 800
+python3 -m routing visualize schedules/schedule_row.sched --seed 3
 ```
 
 Writes an SVG with an animated per-wire glide viewport plus a static
 flipbook (one frame per cycle); `--flip-ms` sets the animation period
-between cycles.
+between cycles. Packed rows have several alternatives — the drawing picks
+one per row with the same seeded-random choice as `run` (`--seed`, default
+0), so pass the same seed as `run --seed N` to draw exactly what the sim
+executes.

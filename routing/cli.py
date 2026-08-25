@@ -123,7 +123,7 @@ def _export_sv(args):
 
 def _visualize(args):
     schedule = load(args.file)
-    svg = render_svg(schedule, flip_ms=args.flip_ms)
+    svg = render_svg(schedule, flip_ms=args.flip_ms, seed=args.seed)
     if args.out:
         with open(args.out, "w") as f:
             f.write(svg)
@@ -193,6 +193,13 @@ def main(argv=None):
         type=int,
         default=1200,
         help="animation period between cycles in ms (default 1200)",
+    )
+    v.add_argument(
+        "--seed",
+        type=int,
+        default=0,
+        help="RNG seed for the per-row choice among a row's alternatives; "
+        "match `run --seed` to draw what the sim executes (default 0)",
     )
 
     args = parser.parse_args(argv)

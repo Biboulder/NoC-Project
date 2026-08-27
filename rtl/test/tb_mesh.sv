@@ -1,4 +1,5 @@
 import router_pkg::*;
+`include "rtl/test/tb_pkt_helpers.svh"
 
 // Testbench for a SIDE=3 mesh built from `mesh #(.SIDE(3))`.
 //
@@ -43,28 +44,6 @@ module tb_mesh;
     always #5 clk = ~clk;
 
     int fail_count = 0;
-
-    function automatic packet_t make_packet(
-        direction_e d1, direction_e d2, direction_e d3, direction_e d4,
-        logic [31:0] payload
-    );
-        logic [11:0] header;
-        header = {d1, d2, d3, d4};
-        return {header, payload};
-    endfunction
-
-    // Expected packet content after `hops` router traversals: the
-    // header is left-shifted by 3 bits per hop with zero-fill, which
-    // is equivalent to (header << 3*hops) truncated to 12 bits.
-    function automatic packet_t expect_pkt(
-        direction_e d1, direction_e d2, direction_e d3, direction_e d4,
-        logic [31:0] payload, int hops
-    );
-        logic [11:0] header, shifted;
-        header  = {d1, d2, d3, d4};
-        shifted = (header << (3 * hops)) & 12'hFFF;
-        return {shifted, payload};
-    endfunction
 
     task automatic check(
         string name, int port,

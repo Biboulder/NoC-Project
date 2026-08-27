@@ -1,6 +1,7 @@
 `timescale 1ns/1ps
 
 import router_pkg::*;
+`include "rtl/test/tb_pkt_helpers.svh"
 
 module tb_router;
 
@@ -18,14 +19,6 @@ router dut (.*);
 always #5 clk = ~clk;   // 10ns period
 
 int errors = 0;
-
-function automatic packet_t build_packet(
-    input logic [31:0] payload,
-    input direction_e  hop1, hop2, hop3, hop4);
-    logic [11:0] header;
-    header = {hop1, hop2, hop3, hop4};
-    build_packet = {header, payload};
-endfunction
 
 task automatic clear_inputs();
     valid_in_n = 0; valid_in_s = 0; valid_in_e = 0; valid_in_w = 0; valid_in_l = 0;
@@ -67,44 +60,44 @@ initial begin
     // ---- Test 1: inject at Local, header NORTH,EAST -> exits North, shifted ----
     @(negedge clk);
     valid_in_l = 1;
-    pkt_in_l   = build_packet(32'hDEADBEEF, NORTH, EAST, LOCAL, LOCAL);
+    pkt_in_l   = make_packet(NORTH, EAST, LOCAL, LOCAL, 32'hDEADBEEF);
     @(posedge clk); #1;
     check_all("local_to_north",
-    1, build_packet(32'hDEADBEEF, EAST, LOCAL, LOCAL, LOCAL),
+    1, make_packet(EAST, LOCAL, LOCAL, LOCAL, 32'hDEADBEEF),
     0, '0, 0, '0, 0, '0, 0, '0);
 
     // ---- Test 2: inject at West, header EAST -> exits East (pass-through) ----
     @(negedge clk);
     clear_inputs();
     valid_in_w = 1;
-    pkt_in_w   = build_packet(32'hCAFEF00D, EAST, LOCAL, LOCAL, LOCAL);
+    pkt_in_w   = make_packet(EAST, LOCAL, LOCAL, LOCAL, 32'hCAFEF00D);
     @(posedge clk); #1;
     check_all("west_to_east",
     0, '0, 0, '0,
-    1, build_packet(32'hCAFEF00D, LOCAL, LOCAL, LOCAL, LOCAL),
+    1, make_packet(LOCAL, LOCAL, LOCAL, LOCAL, 32'hCAFEF00D),
     0, '0, 0, '0);
 
     // ---- Test 3: inject at North, fully-nulled header -> arrival at Local ----
     @(negedge clk);
     clear_inputs();
     valid_in_n = 1;
-    pkt_in_n   = build_packet(32'h11112222, LOCAL, LOCAL, LOCAL, LOCAL);
+    pkt_in_n   = make_packet(LOCAL, LOCAL, LOCAL, LOCAL, 32'h11112222);
     @(posedge clk); #1;
     check_all("arrived_at_local",
     0, '0, 0, '0, 0, '0, 0, '0,
-    1, build_packet(32'h11112222, LOCAL, LOCAL, LOCAL, LOCAL));
+    1, make_packet(LOCAL, LOCAL, LOCAL, LOCAL, 32'h11112222));
 
     // ---- Test 4: simultaneous packets on N and E, different targets (no contention) ----
     @(negedge clk);
     clear_inputs();
-    valid_in_n = 1; pkt_in_n = build_packet(32'hAAAA0001, SOUTH, LOCAL, LOCAL, LOCAL);
-    valid_in_e = 1; pkt_in_e = build_packet(32'hAAAA0002, WEST,  LOCAL, LOCAL, LOCAL);
+    valid_in_n = 1; pkt_in_n = make_packet(SOUTH, LOCAL, LOCAL, LOCAL, 32'hAAAA0001);
+    valid_in_e = 1; pkt_in_e = make_packet(WEST,  LOCAL, LOCAL, LOCAL, 32'hAAAA0002);
     @(posedge clk); #1;
     check_all("simultaneous_two_packets",
     0, '0,
-    1, build_packet(32'hAAAA0001, LOCAL, LOCAL, LOCAL, LOCAL),
+    1, make_packet(LOCAL, LOCAL, LOCAL, LOCAL, 32'hAAAA0001),
     0, '0,
-    1, build_packet(32'hAAAA0002, LOCAL, LOCAL, LOCAL, LOCAL),
+    1, make_packet(LOCAL, LOCAL, LOCAL, LOCAL, 32'hAAAA0002),
     0, '0);
 
     @(negedge clk);

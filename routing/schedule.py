@@ -56,9 +56,6 @@ class Schedule:
             rows.setdefault((e.node, e.clock), []).append(e)
         return rows
 
-    def entries_at(self, clock, node):
-        return [e for e in self.entries if e.node == node and e.clock == clock]
-
 
 def parse(text):
     """Parse schedule text; ValueError with line number on any violation."""

@@ -81,8 +81,8 @@ vvp /tmp/sim.out                # +seed=N seeds the random phase (default 1)
 The bench runs two phases: a single pass firing every schedule alternative
 exactly once (72 packets for the 3x3 row schedule), and 100 periods of
 seeded-random traffic following the schedule (100 x rows packets). It
-detects collisions by data correctness — stray, duplicate, wrong-recipient,
-non-nulled-header, or missing deliveries, plus link contention — and prints
+checks deliveries only — stray, duplicate, wrong-recipient, wrong-cycle, or
+missing deliveries — and prints
 per-phase and overall throughput. A clean run ends with
 `PASS: tb_schedule — collision-free …`.
 

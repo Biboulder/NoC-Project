@@ -1,10 +1,8 @@
-"""Offline schedule generator: BFS all-pairs routes + greedy slot placement.
+"""Offline schedule generator: brute-force all-pairs paths + greedy slot placement.
 
 The routing.md coin flip is realized as the seeded shuffle of (src, dst) pair
 order: the order decides who wins a contested slot. Committed alternatives are
-immutable — a later path that collides "dies", its hops up to the collision
-stay valid and are saved as an extra alternative in that row (packing), and
-the full pair retries at the next clock.
+immutable — a later path that collides "dies" and retries at the next clock.
 """
 
 import random
@@ -13,124 +11,9 @@ from .grid import neighbor_of, node_id, node_position, slot_map
 from .header import Direction, max_hops_for
 from .schedule import Entry, Schedule
 
-__all__ = ["generate", "generate_bruteforce"]
+__all__ = ["generate_bruteforce"]
 
 _SCAN = (Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST)
-
-
-def _shortest_routes(n):
-    """BFS from every node -> {(src, dst): route} (deterministic)."""
-    routes = {}
-    labels = range(1, n * n + 1)
-    for s in labels:
-        sx, sy = node_position(n, s)
-        prev = {(sx, sy): None}  # pos -> (prev_pos, direction)
-        queue = [(sx, sy)]
-        head = 0
-        while head < len(queue):
-            x, y = queue[head]
-            head += 1
-            for d in _SCAN:
-                nb = neighbor_of(n, x, y, d)
-                if nb is not None and nb not in prev:
-                    prev[nb] = ((x, y), d)
-                    queue.append(nb)
-        for d in labels:
-            if d == s:
-                continue
-            dx, dy = node_position(n, d)
-            route = []
-            pos = (dx, dy)
-            while prev[pos] is not None:
-                ppos, dirc = prev[pos]
-                route.append(dirc)
-                pos = ppos
-            route.reverse()
-            routes[(s, d)] = tuple(route)
-    return routes
-
-
-def generate(n, seed):
-    """Collision-free all-pairs schedule; deterministic for (n, seed).
-
-    Returns (Schedule, stats). Every (src, dst) pair gets a full-path
-    alternative; dying paths leave saved-prefix alternatives behind (packing).
-    """
-    if n < 2:
-        raise ValueError(f"grid must be >= 2, got {n}")
-
-    rng = random.Random(seed)
-    labels = list(range(1, n * n + 1))
-    pairs = [(s, d) for s in labels for d in labels if s != d]
-    rng.shuffle(pairs)  # the coin flip
-
-    routes = _shortest_routes(n)
-    committed = []  # list[Entry]
-    committed_slots = []  # parallel list of slot maps
-    committed_rows = {}  # (node, clock) -> list[Entry] in commit order
-    saved_prefixes = 0
-
-    def add(entry, slots):
-        """Commit an alternative; exact (dest, route) duplicates within a row
-        are skipped — the delivery option already exists there."""
-        row = committed_rows.get((entry.node, entry.clock))
-        if row is not None and entry in row:
-            return False
-        committed.append(entry)
-        committed_slots.append(slots)
-        committed_rows.setdefault((entry.node, entry.clock), []).append(entry)
-        return True
-
-    for s, d in pairs:
-        route = routes[(s, d)]
-        c = 0
-        while True:
-            cand = slot_map(n, s, c, route)
-            # Earliest conflicting slot over all committed alternatives from
-            # different rows (same node+clock rows are mutually exclusive).
-            first_shared = None
-            for ce, cslots in zip(committed, committed_slots):
-                if ce.node == s and ce.clock == c:
-                    continue
-                shared = cand.keys() & cslots.keys()
-                if shared:
-                    fs = min(shared)
-                    if first_shared is None or fs < first_shared:
-                        first_shared = fs
-            if first_shared is None:
-                # Pair done whether the alternative is new or was already
-                # saved by an earlier dying path (dedup returns False).
-                add(Entry(s, c, d, route), cand)
-                break
-            hstar = cand[first_shared]  # hop index of the collision (0 = injection)
-            if hstar >= 2:
-                # The path dies here, but hops 1..hstar-1 stay valid: save
-                # them as an extra alternative (dest = router at the last
-                # valid hop). All prefix slots precede first_shared, so they
-                # are conflict-free with every committed alternative.
-                prefix = route[: hstar - 1]
-                x, y = node_position(n, s)
-                for dirc in prefix:
-                    x, y = neighbor_of(n, x, y, dirc)
-                dest = node_id(n, x, y)
-                if add(Entry(s, c, dest, prefix), slot_map(n, s, c, prefix)):
-                    saved_prefixes += 1
-            c += 1  # retry the full pair at the next clock
-
-    rows = {}
-    for e in committed:
-        rows.setdefault((e.node, e.clock), []).append(e)
-    max_clock = max((e.clock for e in committed), default=0)
-    stats = {
-        "full_paths": len(pairs),
-        "saved_prefixes": saved_prefixes,
-        "rows": len(rows),
-        "alternatives": len(committed),
-        "rows_with_choices": sum(1 for alts in rows.values() if len(alts) >= 2),
-        "max_clock": max_clock,
-        "frame": max_clock + max_hops_for(n) + 1,
-    }
-    return Schedule(n, committed), stats
 
 
 def _all_paths(n):
@@ -185,12 +68,6 @@ def generate_bruteforce(n, seed, pack="none"):
       alternative — alternatives are mutually exclusive (one packet per node
       per clock, rule 6) so they may share slots; the candidate is checked
       only against entries of *other* rows.
-    - "scan" (V2): no global-offset sweep — each pair independently scans
-      clocks 0, 1, 2, ... and commits at the first clock where it fits as a
-      new row or an alternative.
-    - "lookback" (V3): the "row" sweep, but a pair that fails at the current
-      offset also tries joining earlier rows of its source (earliest first)
-      before deferring.
 
     Returns (Schedule, stats). Termination is guaranteed: once the offset
     exceeds every committed slot cycle, the first remaining pair's slots all
@@ -198,9 +75,9 @@ def generate_bruteforce(n, seed, pack="none"):
     """
     if n < 2:
         raise ValueError(f"grid must be >= 2, got {n}")
-    if pack not in ("none", "row", "scan", "lookback"):
+    if pack not in ("none", "row"):
         raise ValueError(
-            f"pack must be one of none/row/scan/lookback, got {pack!r}"
+            f"pack must be one of none/row, got {pack!r}"
         )
 
     rng = random.Random(seed)
@@ -227,7 +104,6 @@ def generate_bruteforce(n, seed, pack="none"):
 
     committed = []  # list[Entry]
     committed_slots = []  # parallel list of slot maps
-    row_keys = set()  # (node, clock) rows that exist
 
     def conflict(cand, s, o, skip_row):
         """Candidate slots vs every committed entry; with ``skip_row`` the
@@ -248,40 +124,23 @@ def generate_bruteforce(n, seed, pack="none"):
                 if not conflict(cand, s, o, skip_row):
                     committed.append(Entry(s, o, d, route))
                     committed_slots.append(cand)
-                    row_keys.add((s, o))
                     return True
         return False
 
-    if pack == "scan":
-        # V2: per-pair clock scan — each pair finds its own first fit.
-        for s, d in order:
-            o = 0
-            while not try_place(s, d, o, skip_row=True):
-                o += 1
-        passes = max((e.clock for e in committed), default=0) + 1
-    else:
-        # sweep: none | row | lookback
-        skip_row = pack in ("row", "lookback")
-        remaining = order
-        offset = 0
-        passes = 0
-        while remaining:
-            passes += 1
-            still = []
-            for s, d in remaining:
-                if try_place(s, d, offset, skip_row):
-                    continue
-                if pack == "lookback":
-                    placed = False
-                    for c in range(offset):  # earlier rows, earliest first
-                        if (s, c) in row_keys and try_place(s, d, c, skip_row=True):
-                            placed = True
-                            break
-                    if placed:
-                        continue
-                still.append((s, d))
-            remaining = still
-            offset += 1
+    # sweep: none | row
+    skip_row = pack == "row"
+    remaining = order
+    offset = 0
+    passes = 0
+    while remaining:
+        passes += 1
+        still = []
+        for s, d in remaining:
+            if try_place(s, d, offset, skip_row):
+                continue
+            still.append((s, d))
+        remaining = still
+        offset += 1
 
     assert len(committed) == n * n * (n * n - 1)
     rows = {}

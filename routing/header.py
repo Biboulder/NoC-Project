@@ -11,11 +11,9 @@ from enum import IntEnum
 __all__ = [
     "Direction",
     "max_hops_for",
-    "header_bits",
     "encode",
     "first_field",
     "shift",
-    "fields",
     "route_str",
 ]
 
@@ -59,11 +57,6 @@ def max_hops_for(n):
     return 2 * n - 2
 
 
-def header_bits(n):
-    """Header width in bits: 3 bits per direction field."""
-    return 3 * max_hops_for(n)
-
-
 def encode(route, max_hops):
     """Pack ``route`` into an MSB-first ``max_hops``-field header (int).
 
@@ -91,13 +84,6 @@ def shift(h, max_hops):
     """Advance one field: shift left 3, zeros in at the tail, width kept."""
     mask = (1 << (3 * max_hops)) - 1
     return (h << 3) & mask
-
-
-def fields(h, max_hops):
-    """All ``max_hops`` fields, MSB-first, for diagnostics/verification."""
-    return tuple(
-        Direction((h >> (3 * (max_hops - 1 - i))) & 0b111) for i in range(max_hops)
-    )
 
 
 def route_str(route):

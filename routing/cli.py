@@ -1,34 +1,15 @@
-"""Command line interface: ``python3 -m routing {generate,run}``."""
+"""Command line interface: ``python3 -m routing {generate-bf,run,export-sv,visualize}``."""
 
 import argparse
 import sys
 
-from .generator import generate, generate_bruteforce
+from .generator import generate_bruteforce
 from .grid import Grid
 from .schedule import dump, load
 from .sched2sv import export_schedule
 from .visualize import render_svg
 
 __all__ = ["main"]
-
-
-def _generate(args):
-    schedule, stats = generate(args.grid, args.seed)
-    text = dump(schedule)
-    if args.out:
-        with open(args.out, "w") as f:
-            f.write(text)
-    else:
-        sys.stdout.write(text)
-    print(
-        f"grid {args.grid}x{args.grid}, {stats['full_paths']} full paths, "
-        f"{stats['saved_prefixes']} saved prefixes, "
-        f"{stats['rows_with_choices']} rows with choices, "
-        f"frame {stats['frame']} cycles (max clock {stats['max_clock']}), "
-        f"seed {args.seed}",
-        file=sys.stderr,
-    )
-    return 0
 
 
 def _bf_header(args, schedule, stats):
@@ -139,11 +120,6 @@ def main(argv=None):
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    g = sub.add_parser("generate", help="produce a collision-free all-pairs timing schedule")
-    g.add_argument("--grid", type=int, default=3, help="NxN grid size (default 3)")
-    g.add_argument("--seed", type=int, default=0, help="RNG seed (default 0)")
-    g.add_argument("--out", default=None, help="write schedule to FILE instead of stdout")
-
     bf = sub.add_parser(
         "generate-bf",
         help="produce a collision-free all-pairs timing schedule (simulated brute force)",
@@ -152,12 +128,10 @@ def main(argv=None):
     bf.add_argument("--seed", type=int, default=0, help="RNG seed (default 0)")
     bf.add_argument(
         "--pack",
-        choices=["none", "row", "scan", "lookback"],
+        choices=["none", "row"],
         default="none",
         help="pack several destinations into shared (node, clock) rows: "
-        "none (max bandwidth, one entry per row) | row (recommended: "
-        "tight latency) | scan (per-pair clock scan) | lookback "
-        "(sweep + earlier rows; identical to row in practice)",
+        "none (max bandwidth, one entry per row) | row (recommended: tight latency)",
     )
     bf.add_argument("--out", default=None, help="write schedule to FILE instead of stdout")
 
@@ -203,8 +177,6 @@ def main(argv=None):
 
     args = parser.parse_args(argv)
     try:
-        if args.cmd == "generate":
-            return _generate(args)
         if args.cmd == "generate-bf":
             return _generate_bf(args)
         if args.cmd == "export-sv":

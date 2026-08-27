@@ -40,7 +40,6 @@ module tb_schedule;
     localparam int NNODES = SIDE * SIDE;
     localparam int RANDOM_PERIODS = 100;
     localparam int MAX_INJ = RANDOM_PERIODS * SCHED_ROWS;  // scoreboard capacity (per phase)
-    localparam int MAX_HOPS = 4;                   // grid <= 3: diameter 4
 
     logic clk = 0;
     logic rst_n;
@@ -216,7 +215,7 @@ module tb_schedule;
     endtask
 
     initial begin
-        int p, c, r, a, alt, target, fired_any, last_cycle, last_period;
+        int p, c, r, a, alt, target, fired_any, last_period;
 
         // Reset: three negedges deasserted, release, one settling negedge.
         rst_n = 0;
@@ -256,9 +255,10 @@ module tb_schedule;
             end
             p++;
         end
-        // Drain: last injection cycle + deassert cycle + max hops + 5-cycle margin.
-        last_cycle = last_period * SCHED_FRAME + SCHED_MAX_CLOCK;
-        while (cycle_count <= last_cycle + 1 + MAX_HOPS + 5) drive_cycle();
+        // Drain: the frame has the flush built in (frame = max(clock+h)+1,
+        // enforced by the schedule parser), so run to the end of the last
+        // fired period -- no extra margin.
+        while (cycle_count < (last_period + 1) * SCHED_FRAME) drive_cycle();
         finish_phase("single_pass");
 
         // ============ Phase 2: random traffic, choices within the schedule ============
@@ -276,8 +276,8 @@ module tb_schedule;
                 end
             end
         end
-        last_cycle = (RANDOM_PERIODS - 1) * SCHED_FRAME + SCHED_MAX_CLOCK;
-        while (cycle_count <= last_cycle + 1 + MAX_HOPS + 5) drive_cycle();
+        // Same frame-boundary drain: RANDOM_PERIODS full frames.
+        while (cycle_count < RANDOM_PERIODS * SCHED_FRAME) drive_cycle();
         finish_phase("random");
 
         // ============ Final verdict ============

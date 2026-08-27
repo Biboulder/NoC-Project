@@ -66,31 +66,30 @@ def neighbor_of(n, x, y, port):
 
 
 def slot_map(n, node, clock, route):
-    """Occupied slots for one alternative: (cycle, kind, resource) -> hop index.
+    """Occupied slots for one alternative: (cycle, router) -> hop index.
 
     Hop index 0 is the LOCAL injection at the source router; hop h is the
-    router reached after h hops, at cycle clock + h. Two resource kinds:
+    router reached after h hops, at cycle clock + h. Only rule 1 is modeled:
+    no router may receive more than one packet per cycle.
 
-    - kind 0 (router): router h is occupied at cycle clock + h; no router
-      may receive more than one packet per cycle.
-    - kind 1 (link): hop h traverses the link between routers h-1 and h
-      during cycle clock + h. Links are direction-agnostic: a link may
-      carry at most one packet per cycle, either way -- two packets
-      crossing the same link in opposite directions in the same cycle is
-      a collision (the link is a single bidirectional resource).
+    Links are full-duplex: each router-to-router link is two independent
+    unidirectional wires (NSEW_packet.md "send and receive simultaneously"),
+    so two packets crossing the same link in opposite directions in the same
+    cycle is legal, and a router transmits while receiving. Same-direction
+    link sharing is already a rule-1 collision (both packets arrive at the
+    same router in the same cycle), so router slots alone capture every spec
+    constraint.
 
-    Keys are 3-tuples so mixed router/link keys compare cleanly with min().
+    Keys are 2-tuples (cycle, router) so they compare cleanly with min().
     Routes are validated in-grid by the parser, so hops never leave the grid.
     """
     x, y = node_position(n, node)
-    slots = {(clock, 0, y * n + x): 0}
+    slots = {(clock, y * n + x): 0}
     for h, d in enumerate(route, start=1):
         nb = neighbor_of(n, x, y, d)
         assert nb is not None, "route must be validated in-grid"
-        link = tuple(sorted([(x, y), nb]))
-        slots[(clock + h, 1, link)] = h
         x, y = nb
-        slots[(clock + h, 0, y * n + x)] = h
+        slots[(clock + h, y * n + x)] = h
     return slots
 
 
@@ -129,8 +128,9 @@ class Grid:
         # Alternatives in the same row (same node, same clock) are mutually
         # exclusive — the node executes exactly one (rule 6), so they may
         # share slots. Every pair from different rows is co-executable and
-        # must be slot-disjoint (routers *and* links); that proves *any*
-        # per-row choice is collision-free.
+        # must be router-slot-disjoint (links are full-duplex; same-direction
+        # sharing is already a rule-1 collision), proving *any* per-row choice
+        # is collision-free.
         entries = schedule.entries
         slot_maps = [slot_map(n, e.node, e.clock, e.route) for e in entries]
         for i in range(len(entries)):
@@ -141,16 +141,11 @@ class Grid:
                     continue
                 shared = slot_maps[i].keys() & slot_maps[j].keys()
                 if shared:
-                    cycle, kind, res = min(shared)
-                    if kind == 0:  # router
-                        x, y = res % n, res // n
-                        what = f"router ({x}, {y})"
-                    else:  # link
-                        (x1, y1), (x2, y2) = res
-                        what = f"link ({x1},{y1})-({x2},{y2})"
+                    cycle, res = min(shared)
+                    x, y = res % n, res // n
                     return fail(
                         f"collision: {_describe(e1)} and {_describe(e2)} "
-                        f"both use slot ({cycle}, {what})"
+                        f"both use slot ({cycle}, router ({x}, {y}))"
                     )
 
         # --- Stage 1: clocked execution, seeded-random choice -------------

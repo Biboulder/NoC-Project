@@ -1,38 +1,39 @@
 # grid 3x3, seed 0, pack mode: row
-# rows 19, alternatives 72, rows with choices 14
-# period (frame) 16 cycles, max injection clock 12
-# worst-case wait from period start to any destination: <= 12 clocks
-# per-destination repeat rate: once every 16 cycles
-# aggregate throughput: 19/16 = 1.19 packets per cycle
-# tight latency: one packet per row per period (19 of 72 pairs fire); destinations sharing a row are mutually exclusive; rotating choices cover all pairs in 4 periods
+# rows 20, alternatives 72, rows with choices 17
+# period (frame) 14 cycles, max injection clock 11
+# worst-case wait from period start to any destination: <= 11 clocks
+# per-destination repeat rate: once every 14 cycles
+# aggregate throughput: 20/14 = 1.43 packets per cycle
+# tight latency: one packet per row per period (20 of 72 pairs fire); destinations sharing a row are mutually exclusive; rotating choices cover all pairs in 4 periods
 # command: python3 -m routing generate-bf --grid 3 --seed 0 --pack row
 grid 3
-frame 16
+frame 14
 node 1:
   0 9,6,3,5,2 EESS,EES,EE,EESW,E
-  12 8,7,4 ESS,SS,S
+  5 8,7,4 SSE,SS,S
 node 2:
-  0 9,6,4,8,5,3 ESS,ES,ESWW,ESWS,ESW,E
-  4 7,1 SWS,W
+  0 7,4,8,1 WSS,WS,WSSE,W
+  5 9,6,5,3 ESS,ES,ESW,E
 node 3:
   0 7,4,8,1,5,9,6 SWWS,SWW,SSW,SWWN,SW,SS,S
-  5 2 W
+  10 2 W
 node 4:
-  0 1 N
-  5 9,6,8,2,7,5 SEE,SENE,SE,SENN,S,SEN
-  9 3 NEE
+  0 9,6,8,7,5 SEE,SENE,SE,S,SEN
+  5 3,2,1 ENE,NE,N
 node 5:
-  9 9,1,7,3,4,6,8,2 ES,WN,WS,NE,W,E,WSE,N
+  5 1,3,2 NW,NE,N
+  11 9,7,4,6,8 ES,SW,W,E,S
 node 6:
-  0 7,8,9 SWW,SW,S
-  5 1,4,2,5,3 WNW,WW,NW,W,N
+  0 1,4,2,3,9 NWW,NWWS,NW,N,S
+  5 7,8 SWW,SW
+  9 5 W
 node 7:
   0 3,2,1,4 NNEE,NNE,NN,N
-  5 6,9,8 EEN,EE,E
-  8 5 EN
+  5 6,9,5,8 EEN,EE,EENW,E
 node 8:
-  0 3,1,4,6,2,7,5 NNE,NWN,WN,NNES,NN,W,N
-  5 9 E
+  0 3,6,2,5 NEN,NE,NENW,N
+  5 1,4,7 WNN,WN,W
+  9 9 E
 node 9:
   0 7,8 WW,W
-  5 1,4,2,3,5,6 NWNW,NWW,NWN,NN,NW,N
+  5 1,4,2,3,5,6 NWNW,NWW,NWN,NWNE,NW,N

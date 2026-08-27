@@ -39,7 +39,7 @@ python3 -m routing generate-bf --grid 3 --seed 0 --pack row \
 ```
 
 - `--pack row` packs several destinations into shared (node, clock) rows as
-  mutually exclusive alternatives: low latency, ~19 of 72 pairs fire per
+  mutually exclusive alternatives: low latency, ~20 of 72 pairs fire per
   period, all pairs covered in 4 periods (the checked-in default).
 - `--pack none` gives each pair its own row: max bandwidth, all 72 pairs
   fire every period, at the cost of a longer period.

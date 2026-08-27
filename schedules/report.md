@@ -1,29 +1,28 @@
-# Schedule comparison — 3x3, seed 0 (link-constrained generator)
+# Schedule comparison — 3x3, seed 0 (full-duplex generator)
 
-> **Link-direction rule (added after E8, regenerated all numbers):** a link is
-> a single bidirectional resource — at most one packet may traverse any link
-> per cycle, in either direction. Two packets crossing the same link in
-> opposite directions in the same cycle are a collision (the "link driven
-> from both ends" rule). `Grid.run`'s slot model previously covered routers
-> only, so link conflicts were missed; `slot_map` now records links as
-> resources too, and the generator places against them. `row` and `lookback`
-> are no longer byte-identical (the join-earlier-rows fallback fires under
-> the tighter constraint), though their stats match.
+> **Full-duplex links (added after E8, regenerated all numbers):** each
+> router-to-router link is two independent unidirectional wires — a router
+> transmits while receiving, and two packets crossing the same link in
+> opposite directions in the same cycle is legal. The earlier "link-direction
+> rule" (a link as a single bidirectional resource) was over-conservative and
+> is removed: `slot_map` records only router-receive slots (rule 1), which
+> already capture same-direction link sharing. `none` frame 37→33, `row`
+> frame 16→14.
 
 Two schedules generated with `python3 -m routing generate-bf --grid 3 --seed 0`:
 
 | | `schedule_none.sched` | `schedule_row.sched` |
 |---|---|---|
 | pack mode | `none` | `row` (V1) |
-| rows (= packets per period) | 72 | 19 |
+| rows (= packets per period) | 72 | 20 |
 | alternatives | 72 | 72 |
-| rows with choices | 0 | 14 |
-| max injection clock | 35 | 12 |
-| period (frame) | 37 cycles | 16 cycles |
-| worst-case wait to any destination | <= 35 clocks | <= 12 clocks |
-| per-destination repeat rate | every 37 cycles | every 16 cycles |
-| aggregate throughput | 72/37 = 1.95 pkts/cycle | 19/16 = 1.19 pkts/cycle |
-| all pairs complete | 1 period = 37 cycles (guaranteed) | 4 periods = 64 cycles (rotating choices) |
+| rows with choices | 0 | 17 |
+| max injection clock | 31 | 11 |
+| period (frame) | 33 cycles | 14 cycles |
+| worst-case wait to any destination | <= 31 clocks | <= 11 clocks |
+| per-destination repeat rate | every 33 cycles | every 14 cycles |
+| aggregate throughput | 72/33 = 2.18 pkts/cycle | 20/14 = 1.43 pkts/cycle |
+| all pairs complete | 1 period = 33 cycles (guaranteed) | 4 periods = 56 cycles (rotating choices) |
 | collision safety | any choice, proven by Grid.run | any choice, proven by Grid.run |
 
 ## Semantics
@@ -31,12 +30,12 @@ Two schedules generated with `python3 -m routing generate-bf --grid 3 --seed 0`:
 - **`none` (max bandwidth):** every one of the 72 (src, dst) pairs gets its
   own (node, clock) row with a single destination. All 72 pairs inject every
   period — no choices, no ambiguity, guaranteed delivery of all pairs in one
-  frame. Cost: long 37-cycle period; a specific destination may wait up to
-  35 clocks for its turn.
+  frame. Cost: long 33-cycle period; a specific destination may wait up to
+  31 clocks for its turn.
 - **`row` (low latency, packed):** destinations share rows as mutually
-  exclusive alternatives (14 of 19 rows offer a choice). The node sends one
-  packet per clock, so only 19 of the 72 pairs fire per period; rotate the
-  per-row choices across periods to reach all 72 (4 periods = 64 cycles).
+  exclusive alternatives (17 of 20 rows offer a choice). The node sends one
+  packet per clock, so only 20 of the 72 pairs fire per period; rotate the
+  per-row choices across periods to reach all 72 (4 periods = 56 cycles).
   Cost: lower sustained throughput per node; needs choice logic at the node
   or a fixed choice per period.
 
@@ -57,7 +56,7 @@ Generation time is negligible for both at 3x3. Both are deterministic for
 Every experiment below was run in this repo; all schedules were verified
 with `python3 -m routing run <file>` (or `Grid.run`) — deliveries match
 injections, zero collisions, and `Grid.run`'s stage-0 pre-pass proves
-collision-freedom (routers *and* links) for *any* per-row choice. The
+collision-freedom (routers only — links are full-duplex) for *any* per-row choice. The
 clocked execution then spot-checks a **seeded-random** per-row choice
 (`Grid.run(..., seed=)`, CLI `run --seed N`, default 0) — each row picks
 one of its alternatives uniformly at random, never just the first. Timings
@@ -245,6 +244,33 @@ to the regenerated schedules. The slot-index conflict lookup (Untried)
 remains the fix if the sweep ever becomes the bottleneck.
 
 Decision: no code change beyond the link-direction rule.
+
+### E9 — Full-duplex links: drop the half-duplex link resource (3x3, seed 0)
+
+Question: the RTL is physically full-duplex (two unidirectional wires per
+link, "send and receive simultaneously"), so the generator's "link as a
+single bidirectional resource" rule was over-conservative. Does removing it
+tighten the schedule while staying rule-1 safe?
+
+Setup: `slot_map` drops the link resource, keeping only router-receive slots
+(rule 1); regenerated `none` and `row` at 3x3 seed 0; `Grid.run` ok and
+`tb_schedule` PASS (72/72 single-pass, 2000/2000 random, 0 collisions).
+
+Results (old half-duplex → new full-duplex):
+
+| metric | `none` | `row` |
+|---|---|---|
+| rows | 72 → 72 | 19 → 20 |
+| rows with choices | 0 → 0 | 14 → 17 |
+| max injection clock | 35 → 31 | 12 → 11 |
+| frame | 37 → 33 | 16 → 14 |
+| throughput | 1.95 → 2.18 | 1.19 → 1.43 |
+
+Finding: the link rule was redundant for same-direction traffic (already a
+rule-1 router collision) and only ever forbade legal opposite-direction
+crossings. Dropping it tightens `none` by ~11% and `row` by ~12.5% in frame.
+
+Decision: keep full-duplex (matches the RTL).
 
 ### Untried (candidates, not yet run)
 

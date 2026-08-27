@@ -12,11 +12,12 @@ Schedule table is the following format, and it is unique for each input node. Th
 
 `dest nodes` lists the destinations the node may send to at that clock; the node sends one packet to exactly one of them (rule 1). Each `routes` entry is the matching hop sequence for that destination, abbreviated: N = NORTH, NW = NORTH,WEST, SSE = SOUTH,SOUTH,EAST, etc. Routes never exceed 4 hops (rule 4) and are encoded verbatim as header fields (NSEW_packet.md).
 
-| clock (c) | dest nodes | routes |
-     0          1,2,4     N,NW,SSE
-     1          3,5,4     S,EES,SSE
-    ...
-     n          1,2,4     E,E,NE
+| Clock (c) | Destination nodes | Routes |
+|:---:|---|---|
+| 0 | 1, 2, 4 | `N`, `NW`, `SSE` |
+| 1 | 3, 5, 4 | `S`, `EES`, `SSE` |
+| ... | ... | ... |
+| n | 1, 2, 4 | `E`, `E`, `NE` |
 
 
 Naive schedule table is to let each node communicate once over a 4 cycle period (since each packet can have a max of 4 jumps). This means each node can talk to another node every 9 * 4 = 36 cycles.

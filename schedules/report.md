@@ -213,7 +213,17 @@ arrival) + SMIL full-journey viewport (glide a→b, vanish at dest, reappear
 at source each period). Frame range fixed from conservative
 `max_clock + max_hops + 1` to accurate drain `max(clock + len(route)) + 1`
 — the old formula left empty tail frames (e.g. cycles 33–35 at 3x3 because
-the last injections are 1-hop).
+the last injections are 1-hop). The visualization was later redesigned as a
+JS-driven dark-theme SVG with random-refreshing per-row choices and
+explicit injected/in-flight/delivered states (README §4), then re-centered
+with a re-roll-synced animated flipbook (one dark grid per cycle, packets
+gliding along lit wires, captions per cycle, row-packed rows showing a
+random path re-rolled every period, framed in a draggable/resizable
+window whose frames reflow to the window width and whose canvas grows
+to fit, for screenshot layout) and diagonal-free packet
+motion — viewport packets glide only one hop forward along the current
+route; re-rolls and scrubs teleport instead of interpolating across the
+grid.
 
 ### E8 — Collision audit: why node 9 can't send at clock 0 (3x3 seed 0)
 

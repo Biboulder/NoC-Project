@@ -94,9 +94,24 @@ python3 -m routing visualize schedules/schedule_row.sched --flip-ms 800
 python3 -m routing visualize schedules/schedule_row.sched --seed 3
 ```
 
-Writes an SVG with an animated per-wire glide viewport plus a static
-flipbook (one frame per cycle); `--flip-ms` sets the animation period
-between cycles. Packed rows have several alternatives — the drawing picks
-one per row with the same seeded-random choice as `run` (`--seed`, default
-0), so pass the same seed as `run --seed N` to draw exactly what the sim
-executes.
+Writes a self-contained, browser-interactive dark SVG — open the file in a
+browser (JavaScript animates it; static image viewers show only the
+initial frame). Packets are animated live in three explicit states:
+**injected** (at the source, pulsing ring — has not left), **in flight**
+(gliding along a lit wire), **delivered** (flash at the destination); a HUD
+counts the three disjoint states each cycle, alongside play/pause, speed
+(0.5x/1x/2x), and a cycle scrubber (`‹`/`›` + slider) controls. Packed
+rows have several alternatives — `--seed` picks the *initial* per-row
+choice (default 0, matching `run --seed N` for the first frame only);
+choices then re-roll randomly at every period boundary and via the
+`re-roll` button. `--flip-ms` sets the milliseconds per cycle. Below the
+main viewport (centered over the flipbook) a **static flipbook** shows
+every cycle as its own dark grid — packets glide along lit wires (one
+hop per cycle, axis-aligned on the mesh), captions count in-flight /
+injected packets per cycle, row-packed rows show a random path per
+period (re-rolled at every period boundary and on `re-roll`), and the
+flipbook follows the play/pause and speed controls. The flipbook sits in
+a draggable, resizable window — drag its title bar to move it, drag the
+bottom-right corner to resize; frames re-stack to the window width (more
+columns when wider) and the canvas grows to fit — handy for composing
+screenshot layouts.

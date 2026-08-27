@@ -184,7 +184,7 @@ def main(argv=None):
 
     v = sub.add_parser(
         "visualize",
-        help="render a schedule as SVG (animated viewport + static flipbook)",
+        help="render a schedule as an interactive JS-driven dark SVG (open in a browser)",
     )
     v.add_argument("file", help="schedule file")
     v.add_argument("--out", default=None, help="write SVG to FILE instead of stdout")
@@ -192,14 +192,13 @@ def main(argv=None):
         "--flip-ms",
         type=int,
         default=1200,
-        help="animation period between cycles in ms (default 1200)",
+        help="milliseconds per cycle (default 1200)",
     )
     v.add_argument(
         "--seed",
         type=int,
         default=0,
-        help="RNG seed for the per-row choice among a row's alternatives; "
-        "match `run --seed` to draw what the sim executes (default 0)",
+        help="seed for the initial per-row choice; choices re-roll randomly each period (default 0)",
     )
 
     args = parser.parse_args(argv)

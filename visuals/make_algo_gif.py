@@ -158,15 +158,10 @@ def build(pack):
                     placed = True
                     break
                 key, foe = hit
-                cycle, kind, res = key
-                if kind == 0:  # router
-                    fx, fy = res % N, res // N
-                    desc = f"router {node_id(N, fx, fy)}"
-                    res_pts = [(fx, fy), None]
-                else:          # link
-                    (x1, y1), (x2, y2) = res
-                    desc = f"link {node_id(N, x1, y1)}-{node_id(N, x2, y2)}"
-                    res_pts = [(x1, y1), (x2, y2)]
+                cycle, res = key
+                fx, fy = res % N, res // N
+                desc = f"router {node_id(N, fx, fy)}"
+                res_pts = [(fx, fy), None]
                 events.append({
                     "kind": "die", "route": route,
                     "hops": cycle,          # cycle == hop index at clock 0
@@ -191,7 +186,7 @@ def build(pack):
     # lane (no jump at straight-through routers); 90° turns join via a miter
     # cut. On any segment, runs to different destinations get distinct lanes;
     # same-destination runs may share.
-    lane_vals = [(ln - 3.5) * 6 for ln in range(8)]  # ±3 .. ±21 px
+    lane_vals = [(ln - 5.5) * 6 for ln in range(12)]  # ±3 .. ±33 px (9 dests max)
     seg_owner = {}   # segment -> {lane_px: dest}
     lanes = {}       # (s, d) -> list of px offsets, one per segment
     for s, d, _c, route in committed:
@@ -777,14 +772,14 @@ def compare(out):
         notes = {
             "row": [
                 "same-source rows hold alternatives:",
-                "· 7→3 and 7→2 share the (node 7, clock 0) row",
+                "· 7→3, 7→2, 7→1 and 7→4 share the (node 7, clock 0) row",
                 "· only one fires per cycle (rule 6)",
                 f"· {ctx['stats']['rows']} rows · {ctx['stats']['passes']} "
                 f"passes · frame {ctx['stats']['frame']} cycles",
             ],
             "none": [
                 "strict disjointness — one entry per row:",
-                "· 7 fired 7→3, so 7→2 is blocked until clock 1",
+                "· 7 fired 7→3 at clock 0; 7→2 waits for clock 2",
                 "· each source fires at most once per clock",
                 f"· {ctx['stats']['rows']} rows · {ctx['stats']['passes']} "
                 f"passes · frame {ctx['stats']['frame']} cycles",

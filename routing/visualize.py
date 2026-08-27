@@ -1,11 +1,12 @@
 """SVG visualization of a schedule: an animated viewport plus a static
 flipbook, one grid per clock cycle.
 
-Each packet (canonical choice per row, matching Grid.run) is a colored point
-that moves from source to destination along the wires — one wire per clock
-cycle. When it reaches the destination it vanishes, and it reappears at its
-source when the schedule period repeats. The wire the packet is currently
-traversing is highlighted, so the occupied wires are visible at a glance.
+Each packet (seeded-random per-row choice, matching Grid.run --
+``choose_alternatives``) is a colored point that moves from source to
+destination along the wires — one wire per clock cycle. When it reaches
+the destination it vanishes, and it reappears at its source when the
+schedule period repeats. The wire the packet is currently traversing is
+highlighted, so the occupied wires are visible at a glance.
 
 The animated viewport glides every point continuously along its route (SMIL
 animateMotion); the static flipbook snapshots the traffic at every cycle —
@@ -13,10 +14,11 @@ each point sits mid-wire on the link it is traversing, so scanning frames
 shows it moving along the route, with the traversed wire lit. Colors are
 per destination. One period covers cycles 0..last occupied slot
 (injections plus the drain tail) and repeats; the animation flip period is
-parameterized.
+parameterized. ``seed`` picks the per-row alternative (default 0); pass the
+same seed as ``routing run --seed`` to draw exactly what the sim executes.
 """
 
-from .grid import neighbor_of, node_position
+from .grid import choose_alternatives, neighbor_of, node_position
 
 __all__ = ["render_svg"]
 
@@ -59,7 +61,7 @@ def _packet_pts(n, cell, margin, title_h, e):
     return ppts
 
 
-def _frame(schedule, c, cell, margin, radius, title_h, cap_h, fw, fh, glide_ms):
+def _frame(schedule, c, cell, margin, radius, title_h, cap_h, fw, fh, glide_ms, choice):
     """One cycle snapshot in frame-local coordinates (0,0)-(fw,fh).
 
     Traffic is animated in place: a packet with hop k at this cycle
@@ -69,6 +71,8 @@ def _frame(schedule, c, cell, margin, radius, title_h, cap_h, fw, fh, glide_ms):
     wire is lit while traversed; the packet starts at the source (k = 0,
     static) and is gone the cycle after k = h (delivered). Wires are never
     shared in a collision-free schedule, so no offsetting is needed.
+    ``choice`` maps each (node, clock) row to the alternative drawn (the
+    same seeded-random choice Grid.run executes).
     """
     n = schedule.grid
     rows = schedule.rows()
@@ -84,7 +88,7 @@ def _frame(schedule, c, cell, margin, radius, title_h, cap_h, fw, fh, glide_ms):
     movers = []  # (start, end, color): glide along the lit wire
     in_flight = 0
     for (node, clock), alts in rows.items():
-        e = alts[0]  # canonical choice, same as Grid.run
+        e = choice[(node, clock)]  # seeded-random choice, same as Grid.run
         h = len(e.route)
         k = c - e.clock
         if not 0 <= k <= h:
@@ -131,13 +135,15 @@ def _frame(schedule, c, cell, margin, radius, title_h, cap_h, fw, fh, glide_ms):
     return "".join(parts)
 
 
-def render_svg(schedule, flip_ms=1200):
+def render_svg(schedule, flip_ms=1200, seed=0):
     n = schedule.grid
     # Cycles 0..period-1: injections plus the real drain tail (flush).
     # `frame N` in the file overrides the derived value.
     frames = schedule.period
     if flip_ms <= 0:
         raise ValueError(f"flip_ms must be > 0, got {flip_ms}")
+
+    choice = choose_alternatives(schedule, seed)  # same choice Grid.run executes
 
     cell = min(90, max(40, 240 // n))
     margin = 26
@@ -163,7 +169,8 @@ def render_svg(schedule, flip_ms=1200):
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
         f'font-family="monospace">',
         f'<text x="12" y="18" font-size="14" font-weight="bold">grid {n}x{n}, '
-        f"{frames} cycles per period (repeats), {len(schedule.entries)} alternatives"
+        f"{frames} cycles per period (repeats), {len(schedule.entries)} alternatives, "
+        f"{len(schedule.rows())} per period (choice seed {seed})"
         f"</text>",
         f'<text x="12" y="38" font-size="11" fill="#666666">animated (flip {flip_ms} ms):</text>',
     ]
@@ -182,7 +189,7 @@ def render_svg(schedule, flip_ms=1200):
     )
     parts.append(_grid_circles(n, cell, margin, radius, title_h))
     for (node, clock), alts in rows.items():
-        e = alts[0]  # canonical choice, same as Grid.run
+        e = choice[(node, clock)]  # seeded-random choice, same as Grid.run
         h = len(e.route)
         color = _PALETTE[(e.dest - 1) % len(_PALETTE)]
         ppts = _packet_pts(n, cell, margin, title_h, e)
@@ -240,7 +247,7 @@ def render_svg(schedule, flip_ms=1200):
         fx = (c % cols) * (fw + gap)
         fy = (c // cols) * (fh + gap)
         parts.append(
-            f'<g transform="translate({fx},{fy})">{_frame(schedule, c, cell, margin, radius, title_h, cap_h, fw, fh, flip_ms)}</g>'
+            f'<g transform="translate({fx},{fy})">{_frame(schedule, c, cell, margin, radius, title_h, cap_h, fw, fh, flip_ms, choice)}</g>'
         )
     parts.append("</g>")
     parts.append("</svg>")
